@@ -1,0 +1,79 @@
+#!/usr/bin/python2.7
+
+import argparse;
+import _mysql
+
+
+
+max_detail_age = 24 * 60 * 60; # 1 day
+
+def process_item(opts, conn, itemId):
+    table = "{}.Item{}".format(opts.database, itemId);
+    query = "SELECT unix_timestamp(Time), VALUE FROM {} WHERE unix_timestamp(Time) < unix_timestamp(NOW()) - {} ORDER BY Time".format(table, opts.age);
+    conn.query(query);
+    result = conn.use_result()
+    row = result.fetch_row();
+    currentBaseTimestamp = 0;
+    currentItemsForBaseTimestamp = [];
+    timestampsToRemove = [];
+    tuplesToAdd = [];
+    while (row is not None and row != ()):
+        baseTimestamp = int(int(row[0][0]) / int(opts.interval )) * int(opts.interval );
+        if (currentBaseTimestamp == 0): 
+            currentBaseTimestamp = baseTimestamp;
+        print baseTimestamp, row;
+        
+        if (baseTimestamp != currentBaseTimestamp):
+            average = int(100 * sum(currentItemsForBaseTimestamp) / float(len(currentItemsForBaseTimestamp))) / 100.0;
+            tuplesToAdd.append((currentBaseTimestamp, average))
+            currentItemsForBaseTimestamp = [];
+            currentBaseTimestamp = baseTimestamp;
+            
+        if (baseTimestamp == currentBaseTimestamp):
+            currentItemsForBaseTimestamp.append(float(row[0][1]))
+            timestampsToRemove.append(row[0][0])    
+        row = result.fetch_row();
+
+
+
+    for timestamp in timestampsToRemove:
+        query = "DELETE FROM {} WHERE Time = FROM_UNIXTIME({});".format(table, timestamp);
+        conn.query(query);
+    # adding the aggregated results here.
+    for (timestamp, value) in tuplesToAdd:    
+        query = "INSERT INTO {0} (Time, Value) VALUES (FROM_UNIXTIME({1}), {2}) ON DUPLICATE KEY UPDATE Value = {2};".format(table, timestamp, value)
+        conn.query(query);
+
+def main():
+
+    description = "Cleanup the OpenHAB MySQL/MariaDB backend database"
+    epilog = "";
+    parser = argparse.ArgumentParser(description=description, epilog=epilog);
+    parser.add_argument("--host",     "-s", dest="host"    , default="localhost", help="Database host to connect to.  (Default = localhost)");
+    parser.add_argument("--username", "-u", dest="username", default="openhab",   help="Database username to connect with.  (Default = openhab)");
+    parser.add_argument("--password", "-p", dest="password", default="openhab",   help="Database password to connect with.  (Default = openhab)");
+    parser.add_argument("--database", "-d", dest="database", default="openhab",   help="Database name to use.  (Default = openhab)");
+    parser.add_argument("--interval", "-i", dest="interval", default=3600,        help="Interval duration in seconds.  This value will be used to be the interval to aggregate the samples to.  (Default=3600 / 1 hour)", type=int);
+    parser.add_argument("--age",      "-a", dest="age",      default=86400,       help="Minimum age in seconds of the samples to aggregate. (Default=86400 / 1 day)", type=int);
+    parser.add_argument("-v", dest="verbosity", action="count", help="Increase the verbosity.");
+    parser.add_argument("--item", dest="items", action="append", help="Only check this item.  This option can be repeated");
+    opts = parser.parse_args();
+    print opts;
+
+    conn = _mysql.connect(host = opts.host, user = opts.username, passwd = opts.password, db = opts.database) 
+
+    query = "SELECT * FROM Items;"
+    conn.query(query);
+    result = conn.store_result();
+
+    rows = result.fetch_row(maxrows = 0);
+
+    for (itemId, itemName) in rows:
+        if opts.items is None or (itemName in opts.items):
+           print "Processing item {}: {}".format(itemId, itemName);
+           process_item(opts, conn, itemId);
+
+    exit();
+
+
+main();
