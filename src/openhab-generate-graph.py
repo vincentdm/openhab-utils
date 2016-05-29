@@ -1,4 +1,4 @@
-#!/usr/local/bin/python2.7
+#!/usr/bin/python2.7
 # encoding: utf-8
 '''
  -- shortdesc
@@ -23,10 +23,12 @@ import os
 from argparse import ArgumentParser
 from argparse import RawDescriptionHelpFormatter
 
+from openhab_utils import staticconfig, Database, GraphGenerator
+
 __all__ = []
-__version__ = 0.1
+__version__ = staticconfig.VERSION
 __date__ = '2016-05-28'
-__updated__ = '2016-05-28'
+__updated__ = '2016-05-29'
 
 DEBUG = 1
 TESTRUN = 0
@@ -72,35 +74,32 @@ USAGE
     try:
         # Setup argument parser
         parser = ArgumentParser(description=program_license, formatter_class=RawDescriptionHelpFormatter)
-        parser.add_argument("-r", "--recursive", dest="recurse", action="store_true", help="recurse into subfolders [default: %(default)s]")
         parser.add_argument("-v", "--verbose", dest="verbose", action="count", help="set verbosity level [default: %(default)s]")
-        parser.add_argument("-i", "--include", dest="include", help="only include paths matching this regex pattern. Note: exclude is given preference over include. [default: %(default)s]", metavar="RE" )
-        parser.add_argument("-e", "--exclude", dest="exclude", help="exclude paths matching this regex pattern. [default: %(default)s]", metavar="RE" )
+        parser.add_argument("-o", "--output-file", dest="outfile", default="out.png", required = False, help="the filename (including path) where the image will be stored [default: %(default)s]")
+        parser.add_argument("-c", "--connection-string", dest="conn", required = True, help="connection string for the database.  E.g. mysql://username:password@localhost/dbname")
+        parser.add_argument("-i", "--item", dest="item_list", action="append", required = True, help="item names to include in the graph")
+        parser.add_argument("--start", dest="start", required = False, help="Start of the period")
+        parser.add_argument("--end", dest="end", required = False, help="End of the period")
+        parser.add_argument("--interval", dest="interval", required = False, help="interval")
+        
         parser.add_argument('-V', '--version', action='version', version=program_version_message)
-        parser.add_argument(dest="paths", help="paths to folder(s) with source file(s) [default: %(default)s]", metavar="path", nargs='+')
 
         # Process arguments
         args = parser.parse_args()
-
-        paths = args.paths
         verbose = args.verbose
-        recurse = args.recurse
-        inpat = args.include
-        expat = args.exclude
-
+        
         if verbose > 0:
             print("Verbose mode on")
-            if recurse:
-                print("Recursive mode on")
-            else:
-                print("Recursive mode off")
+            
+        
+        # Get the database
+        db = Database(args.conn)
+        generator = GraphGenerator(db)
+        #generator.Generate(args.items(), period, start, stop, interval)
+        generator.GenerateLastMonth(args.item_list,out_file = args.outfile)
+        
 
-        if inpat and expat and inpat == expat:
-            raise CLIError("include and exclude pattern are equal! Nothing will be processed.")
-
-        for inpath in paths:
-            ### do something with inpath ###
-            print(inpath)
+        
         return 0
     except KeyboardInterrupt:
         ### handle keyboard interrupt ###
@@ -115,9 +114,9 @@ USAGE
 
 if __name__ == "__main__":
     if DEBUG:
-        sys.argv.append("-h")
+        #sys.argv.append("-h")
         sys.argv.append("-v")
-        sys.argv.append("-r")
+        
     if TESTRUN:
         import doctest
         doctest.testmod()
