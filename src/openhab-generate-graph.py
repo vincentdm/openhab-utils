@@ -24,11 +24,13 @@ from argparse import ArgumentParser
 from argparse import RawDescriptionHelpFormatter
 
 from openhab_utils import staticconfig, Database, GraphGenerator
+from datetime import datetime, timedelta
+from __builtin__ import str
 
 __all__ = []
 __version__ = staticconfig.VERSION
 __date__ = '2016-05-28'
-__updated__ = '2016-05-29'
+__updated__ = '2016-06-04'
 
 DEBUG = 1
 TESTRUN = 0
@@ -81,6 +83,8 @@ USAGE
         parser.add_argument("--start", dest="start", required = False, help="Start of the period")
         parser.add_argument("--end", dest="end", required = False, help="End of the period")
         parser.add_argument("--interval", dest="interval", required = False, help="interval")
+        parser.add_argument("--days", dest="days", required = False, help="days")
+        parser.add_argument("--hours", dest="hours", required = False, help="hours")
         
         parser.add_argument('-V', '--version', action='version', version=program_version_message)
 
@@ -96,8 +100,35 @@ USAGE
         db = Database(args.conn)
         generator = GraphGenerator(db)
         #generator.Generate(args.items(), period, start, stop, interval)
-        generator.GenerateLastMonth(args.item_list,out_file = args.outfile)
+        #generator.GenerateLastDay(args.item_list,out_file = args.outfile)
         
+        
+        """
+        Parsing the arguments
+        """
+        date_end = datetime.now()
+        date_start = date_end - timedelta(1)
+        if  hasattr(args,'end') and args.end is not None :
+            date_end = datetime.strptime(args.end,'%Y%m%d %H%M%S')
+        
+        if hasattr(args, 'start')  and args.start is not None :
+            date_start = datetime.strptime(args.start,'%Y%m%d %H%M%S')
+        elif hasattr(args, 'days') and args.days is not None:
+            date_start = date_end - timedelta(days = int(args.days))
+        elif hasattr(args, 'hours') and args.hours is not None:
+            date_start = date_end - timedelta(hours = int(args.hours))
+        
+            
+        
+        if (args.verbose > 0):
+            print "Using period: {} - {}".format(date_start, date_end)
+        
+        generator.Generate(args.item_list, date_start, date_end, args.outfile)
+        
+               
+        
+            
+            
 
         
         return 0
