@@ -87,6 +87,11 @@ class GraphGenerator():
         else:
             plt.savefig(out_file)
     
+    def GenerateLastDay(self, items, out_file):
+        date_end = datetime.now()
+        date_start = date_end - timedelta(1)
+        self.Generate(items, date_start, date_end, out_file=out_file)
+    
     def GenerateLastWeek(self, items, out_file):
         date_end = datetime.now()
         date_start = date_end - timedelta(7)
