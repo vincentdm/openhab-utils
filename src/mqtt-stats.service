@@ -1,0 +1,15 @@
+[Unit]
+Description=MQTTstats service
+After=rsyslog.target remote-fs.target multi-user.target
+
+[Service]
+Type=simple
+User=pi
+Group=pi
+WorkingDirectory=/home/pi/openhab-utils/src
+ExecStart=/home/pi/openhab-utils/src/mqtt-stats
+StandardOutput=syslog
+StandardError=syslog
+
+[Install]
+WantedBy=multi-user.target

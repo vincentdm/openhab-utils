@@ -1,0 +1,118 @@
+#!/usr/bin/python2.7
+
+import paho.mqtt.client as mqtt
+#from openhab_utils import Database
+
+from openhab_utils.database import Database
+
+from sqlalchemy.sql import func
+from datetime import datetime, timedelta
+from sqlalchemy.sql.elements import between
+
+import time
+topic_config=[
+  {
+      'topic':'/pymygw/1/8/0/1',
+      'openhab-item':'Hall_Temp',
+      'stats':['avg_5m','avg_1h','avg_6h']
+  },
+  {
+      'topic':'/pymygw/1/7/0/1',
+      'openhab-item':'Living_Temp2',
+      'stats':['avg_5m','avg_1h','avg_6h']
+  },
+  {
+      'topic':'/pymygw/1/5/1/1',
+      'openhab-item':'Kitchen_Temp',
+      'stats':['avg_5m','avg_1h','avg_6h']
+  }
+  ,
+  {
+      'topic':'/pymygw/1/5/0/1',
+      'openhab-item':'Bathroom_Temp',
+      'stats':['avg_5m','avg_1h','avg_6h']
+  },
+  {
+      'topic':'/pymygw/1/10/2/1',
+      'openhab-item':'Basement_Temp',
+      'stats':['avg_5m','avg_1h','avg_6h']
+  },
+  {
+      'topic':'/pymygw/1/10/1/1',
+      'openhab-item':'Basement_Hum',
+      'stats':['avg_5m','avg_1h','avg_6h']
+  }
+]
+output_topic="/mqttstats/{openhab-item}/{stat}"
+
+mqtt_server="192.168.0.4"
+db_server="mysql://openhab:openhab@192.168.0.3/openhab-keuken"
+
+db = None;
+
+
+def avg(db,table, ts_start, ts_end):
+    sess = db.get_session()
+    res = sess.query(func.avg(table.c.Value)).filter(table.c.Time.between(ts_start, ts_end))
+    return res.one()[0]
+    
+def avg_5m(db,table):
+    date_end = datetime.now()
+    date_start = date_end - timedelta(minutes = 5)
+    return avg(db, table,  date_start, date_end)
+    
+def avg_1h(db,table):
+    date_end = datetime.now()
+    date_start = date_end - timedelta(hours = 1)
+    return avg(db, table,  date_start, date_end)
+    
+def avg_6h(db,table):
+    date_end = datetime.now()
+    date_start = date_end - timedelta(hours = 6)
+    return avg(db, table,  date_start, date_end)
+  
+func_mapping={'avg_5m': avg_5m, 'avg_1h': avg_1h, 'avg_6h': avg_6h}
+            
+def update_item(db, config, value):
+    table = db.get_table_for_item(config['openhab-item'])
+    print "Table={}".format(table)
+    for func in config['stats']:
+        value = func_mapping[func](db,table)
+        print "{} = {}".format(func,value)
+        config['stat'] = func
+        topic=output_topic.format(**config)
+        
+        client.publish(topic, value)
+        
+
+# The callback for when the client receives a CONNACK response from the server.
+def on_connect(client, userdata, rc):
+    print("Connected with result code "+str(rc))
+	# Subscribing in on_connect() means that if we lose the connection and
+	# reconnect then subscriptions will be renewed.
+	
+    for config in topic_config:
+	    print "subscribing to: ",config['topic']
+	    client.subscribe(config['topic'])
+
+# The callback for when a PUBLISH message is received from the server.
+def on_message(client, userdata, msg):
+	
+	db = Database(db_server)
+	
+	for config in topic_config:
+	    if config['topic'] == msg.topic:
+	        print(msg.topic+" "+str(msg.payload))
+            update_item(db, config, msg.payload)
+
+
+if __name__ == "__main__":
+    
+
+    client = mqtt.Client()
+    client.on_connect = on_connect
+    client.on_message = on_message
+
+    client.connect(mqtt_server, 1883, 60)
+    client.loop_forever()
+   
