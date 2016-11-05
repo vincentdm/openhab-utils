@@ -46,7 +46,7 @@ topic_config=[
 output_topic="/mqttstats/{openhab-item}/{stat}"
 
 mqtt_server="192.168.0.4"
-db_server="mysql://openhab:openhab@192.168.0.3/openhab-keuken"
+db_server="mysql://openhab:openhab@192.168.0.5/openhab-keuken"
 
 db = None;
 
@@ -54,7 +54,9 @@ db = None;
 def avg(db,table, ts_start, ts_end):
     sess = db.get_session()
     res = sess.query(func.avg(table.c.Value)).filter(table.c.Time.between(ts_start, ts_end))
-    return res.one()[0]
+    ret = res.one()[0]
+    sess.close()
+    return ret
     
 def avg_5m(db,table):
     date_end = datetime.now()
@@ -99,11 +101,12 @@ def on_connect(client, userdata, rc):
 def on_message(client, userdata, msg):
 	
 	db = Database(db_server)
+    
 	
 	for config in topic_config:
 	    if config['topic'] == msg.topic:
 	        print(msg.topic+" "+str(msg.payload))
-            update_item(db, config, msg.payload)
+                update_item(db, config, msg.payload)
 
 
 if __name__ == "__main__":
